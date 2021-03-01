@@ -22,16 +22,16 @@
 	        "tooltip": "The command name is ! then whatever is in this box.",
 		"group": "Command Settings"
     	},
-	"ClearCommandName": {
+	"ResetCommandName": {
 	        "type": "textbox",
 	        "value": "burpeereset",
-	        "label": "Clear Command Name",
+	        "label": "Reset Command Name",
 	        "tooltip": "The command name is ! then whatever is in this box.",
 		"group": "Command Settings"
     	},
 	"ExerciseType": {
 	        "type": "textbox",
-	        "value": "burpees",
+	        "value": "burpee",
 	        "label": "Type of Exercise",
 	        "tooltip": "Which exercise would you like to have to do after subs?",
 		"group": "Exercise Settings"
