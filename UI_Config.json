@@ -1,0 +1,91 @@
+{
+	"output_file": "settings.json",
+	"RunCommandsOnlyWhenLive": {
+		"type": "checkbox",
+		"value": "true",
+		"label": "Accept Commands Only When Live",
+		"tooltip": "Indicates whether the script only accepts commands while you are live.",
+		"group": "Command Settings"
+	},
+	"CommandPermissions": {
+	        "type": "dropdown",
+	        "value": "Everyone",
+	        "items": ["Everyone","Regular","Subscriber","Moderator","Editor"],
+	        "label": "Command Permissions",
+	        "tooltip": "The permission level required to use script commands.",
+		"group": "Command Settings"
+    	},
+	"CountCommandName": {
+	        "type": "textbox",
+	        "value": "burpeecount",
+	        "label": "Count Command Name",
+	        "tooltip": "The command name is ! then whatever is in this box.",
+		"group": "Command Settings"
+    	},
+	"ClearCommandName": {
+	        "type": "textbox",
+	        "value": "burpeereset",
+	        "label": "Clear Command Name",
+	        "tooltip": "The command name is ! then whatever is in this box.",
+		"group": "Command Settings"
+    	},
+	"ExerciseType": {
+	        "type": "textbox",
+	        "value": "burpees",
+	        "label": "Type of Exercise",
+	        "tooltip": "Which exercise would you like to have to do after subs?",
+		"group": "Exercise Settings"
+    	},
+	"IncrementAmount": {
+	        "type": "numberbox",
+	        "value": 1,
+	        "label": "Increment Per Sub",
+	        "tooltip": "How many exercise reps would you like to do after each sub?",
+		"group": "Exercise Settings"
+    	},
+	"ClientID": {
+		"type": "textbox",
+		"value": "",
+		"label": "Twitch Client ID",
+		"tooltip": "Enter the client ID for your registered application.",
+		"group": "Twitch oAuth - KEEP HIDDEN"
+	},
+	"TwitchOAuthToken": {
+		"type": "textbox",
+		"value": "",
+		"label": "Twitch oAuth Token",
+		"tooltip": "Enter an oAuth token that allows the bot to read channel point redemptions on the channel being watched.",
+		"group": "Twitch oAuth - KEEP HIDDEN"
+	},
+	"btnGetToken": {
+		"type": "button",
+		"label": "Get Token",
+		"tooltip": "Generate an oAuth Token for the watched twitch account with permissions to read subscriptions.",
+		"wsevent": "",
+		"function": "GetToken",
+		"group": "Twitch oAuth - KEEP HIDDEN"
+	},
+	"EnableResponses": {
+		"type": "checkbox",
+		"value": false,
+		"label": "Enable Chat Responses",
+		"tooltip": "Enable or disable bot responses to flag redemptions.",
+		"group": "Output Settings"
+	},
+	"EnableDebug": {
+		"type": "checkbox",
+		"value": false,
+		"label": "Enable Debug",
+		"tooltip": "Enable or disable debug logs.",
+		"group": "Output Settings"
+	},
+	"btnreadme": {
+		"type": "button",
+		"label": "Open Readme",
+		"tooltip": "Opens the readme file.",
+		"wsevent": "",
+		"_comment": "Do not change the function name! Ever!!",
+		"function": "openreadme",
+		"group": ""
+	}
+}
