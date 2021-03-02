@@ -13,7 +13,7 @@ ScriptName = "SubExerciseCounter"
 Website = "https://www.twitch.tv/Crimdahl"
 Description = "Tracks a count of subscription-related exercises."
 Creator = "Crimdahl"
-Version = "0.1.3"
+Version = "1.1.0"
 
 #   Define Global Variables <Required>
 ScriptPath = os.path.dirname(__file__)
@@ -21,7 +21,6 @@ SettingsPath = os.path.join(ScriptPath, "settings.json")
 ReadmePath = os.path.join(ScriptPath, "Readme.md")
 ScriptSettings = None
 ExerciseCount = 0
-IncrementAmount = 1
 
 EventReceiver = None
 ThreadQueue = []
@@ -37,7 +36,11 @@ class Settings(object):
         else:
             #Output Settings
             self.EnableDebug = True
-            self.EnableResponses = True
+            self.EnableChatResponses = True
+            self.EnableChatPermissionErrors = True
+            self.EnableChatLiveErrors = False
+            self.EnableSubscriptionThanks = False
+            self.ThankYouMessage = "Thank you for the subscription! $channel's $exercise count is now at $count."
             self.RunCommandsOnlyWhenLive = True
 
             #Command Settings
@@ -67,26 +70,26 @@ class Settings(object):
 def Execute(data):
     if data.Message == "!" + ScriptSettings.CountCommandName:
         if ScriptSettings.RunCommandsOnlyWhenLive and not Parent.IsLive():
-            if ScriptSettings.EnableResponses: Post("Command ignored: the channel is currently offline.")
+            if ScriptSettings.EnableChatLiveErrors: Post("Command ignored: the channel is currently offline.")
             if ScriptSettings.EnableDebug: Log("Command ignored: the channel is currently offline.")
         elif not Parent.HasPermission(data.User, ScriptSettings.CommandPermissions, ""):
-            if ScriptSettings.EnableResponses: Post("Sorry, " + data.UserName + ", you do not have permission to use the Count command.")
+            if ScriptSettings.EnableChatPermissionErrors: Post("Sorry, " + data.UserName + ", you do not have permission to use the Count command.")
             if ScriptSettings.EnableDebug: Log(data.UserName + " has insufficient permissions to use the Count command.")
         else:
             global ExerciseCount
             Post("Your current " + ScriptSettings.ExerciseType + " count from subscriptions is " + str(ExerciseCount) + ".")
-            if ScriptSettings.EnableDebug: Log("Count command called. " + ScriptSettings.ExerciseType + " count is " + str(ExerciseCount) + ".")
+            if ScriptSettings.EnableDebug: Log("Count command called. " + str.capitalize(ScriptSettings.ExerciseType) + " count is " + str(ExerciseCount) + ".")
     elif data.Message == "!" + ScriptSettings.ResetCommandName:
         if ScriptSettings.RunCommandsOnlyWhenLive and not Parent.IsLive():
-            if ScriptSettings.EnableResponses: Post("Command ignored: the channel is currently offline.")
+            if ScriptSettings.EnableChatLiveErrors: Post("Command ignored: the channel is currently offline.")
             if ScriptSettings.EnableDebug: Log("Command ignored: the channel is currently offline.")
         elif not Parent.HasPermission(data.User, ScriptSettings.CommandPermissions, ""):
-            if ScriptSettings.EnableResponses: Post("Sorry, " + data.UserName + ", you do not have permission to use the Reset command.")
+            if ScriptSettings.EnableChatPermissionErrors: Post("Sorry, " + data.UserName + ", you do not have permission to use the Reset command.")
             if ScriptSettings.EnableDebug: Log(data.UserName + " has insufficient permissions to use the Reset command.")
         else:
             global ExerciseCount
             ExerciseCount = 0
-            if ScriptSettings.EnableResponses: Post(str.capitalize(ScriptSettings.ExerciseType) + " count reset.")
+            if ScriptSettings.EnableChatResponses: Post(str.capitalize(ScriptSettings.ExerciseType) + " count reset.")
             if ScriptSettings.EnableDebug: Log("Reset command called. " + ScriptSettings.ExerciseType + " count reset.")
     return
 
@@ -171,11 +174,15 @@ def EventReceiverNewSubscription(sender, e):
     ThreadQueue.append(threading.Thread(target=NewSubscriptionWorker))
 
 def NewSubscriptionWorker():
-    if ScriptSettings.EnableDebug:
-        Log("New subscription received. Incrementing exercise count.")
+    if ScriptSettings.EnableDebug: Log("New subscription received. Incrementing exercise count.")
     global ExerciseCount
     ExerciseCount = ExerciseCount + ScriptSettings.IncrementAmount
-    Post("Thank you for the subscription. " + str.capitalize(ScriptSettings.ExerciseType) + " are now at " + str(ExerciseCount) + ".")
+    if ScriptSettings.EnableSubscriptionThanks:
+        message = ScriptSettings.ThankYouMessage
+        message = message.replace("$channel", Parent.GetChannelName())
+        message = message.replace("$exercise", ScriptSettings.ExerciseType)
+        message = message.replace("$count", str(ExerciseCount))
+        Post(message)
 
     global PlayNextAt
     PlayNextAt = datetime.datetime.now() + datetime.timedelta(0, 0)

@@ -65,18 +65,46 @@
 		"function": "GetToken",
 		"group": "Twitch oAuth - KEEP HIDDEN"
 	},
-	"EnableResponses": {
-		"type": "checkbox",
-		"value": false,
-		"label": "Enable Chat Responses",
-		"tooltip": "Enable or disable bot responses to flag redemptions.",
-		"group": "Output Settings"
-	},
 	"EnableDebug": {
 		"type": "checkbox",
 		"value": false,
 		"label": "Enable Debug",
-		"tooltip": "Enable or disable debug logs.",
+		"tooltip": "Enable or disable debug logging.",
+		"group": "Output Settings"
+	},
+	"EnableChatResponses": {
+		"type": "checkbox",
+		"value": false,
+		"label": "Enable Chat Command Responses",
+		"tooltip": "Enable or disable optional chat responses to commands.",
+		"group": "Output Settings"
+	},
+	"EnableChatPermissionErrors": {
+		"type": "checkbox",
+		"value": false,
+		"label": "Enable Chat Permission Errors",
+		"tooltip": "Enable or disable chat responses to users that do not have sufficient privileges.",
+		"group": "Output Settings"
+	},
+	"EnableChatLiveErrors": {
+		"type": "checkbox",
+		"value": false,
+		"label": "Enable Chat Live Errors",
+		"tooltip": "Enable or disable chat responses to errors resulting from the stream being offline.",
+		"group": "Output Settings"
+	},
+	"EnableSubscriptionThanks": {
+		"type": "checkbox",
+		"value": false,
+		"label": "Enable Subscription Thank You",
+		"tooltip": "Enable or disable thank you responses to receiving a subscription.",
+		"group": "Output Settings"
+	},
+	"ThankYouMessage": {
+		"type": "textbox",
+		"value": "Thank you for the subscription! $channel's $exercise count is now at $count.",
+		"label": "Thank You Message",
+		"tooltip": "Customize the thank you message. Parameters: $channel, $exercise, $count.",
 		"group": "Output Settings"
 	},
 	"btnreadme": {
