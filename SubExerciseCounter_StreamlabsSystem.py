@@ -39,7 +39,7 @@ class Settings(object):
             self.EnableChatResponses = True
             self.EnableChatPermissionErrors = True
             self.EnableChatLiveErrors = False
-            self.EnableSubscriptionThanks = False
+            self.EnableSubscriptionThanks = True
             self.ThankYouMessage = "Thank you for the subscription! $channel's $exercise count is now at $count."
             self.RunCommandsOnlyWhenLive = True
 
