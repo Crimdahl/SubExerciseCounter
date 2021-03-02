@@ -76,28 +76,28 @@
 		"type": "checkbox",
 		"value": true,
 		"label": "Enable Chat Command Responses",
-		"tooltip": "Enable or disable optional chat responses to commands.",
+		"tooltip": "Enable or disable optional chat responses to commands, such as with the Reset command.",
 		"group": "Output Settings"
 	},
 	"EnableChatPermissionErrors": {
 		"type": "checkbox",
 		"value": true,
 		"label": "Enable Chat Permission Errors",
-		"tooltip": "Enable or disable chat responses to users that do not have sufficient privileges.",
+		"tooltip": "Enable or disable errors in chat for when users use the commands without sufficient privileges.",
 		"group": "Output Settings"
 	},
 	"EnableChatLiveErrors": {
 		"type": "checkbox",
 		"value": false,
 		"label": "Enable Chat Live Errors",
-		"tooltip": "Enable or disable chat responses to errors resulting from the stream being offline.",
+		"tooltip": "Enable or disable errors in chat resulting from the stream being offline.",
 		"group": "Output Settings"
 	},
 	"EnableSubscriptionThanks": {
 		"type": "checkbox",
 		"value": true,
 		"label": "Enable Subscription Thank You",
-		"tooltip": "Enable or disable thank you responses to receiving a subscription.",
+		"tooltip": "Enable or disable thank you messages to receiving a subscription.",
 		"group": "Output Settings"
 	},
 	"ThankYouMessage": {
