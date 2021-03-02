@@ -32,7 +32,7 @@
 	"ExerciseType": {
 	        "type": "textbox",
 	        "value": "burpee",
-	        "label": "Type of Exercise",
+	        "label": "Type of Exercise (Singular!)",
 	        "tooltip": "Which exercise would you like to have to do after subs?",
 		"group": "Exercise Settings"
     	},

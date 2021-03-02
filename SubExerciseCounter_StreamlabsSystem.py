@@ -13,7 +13,7 @@ ScriptName = "SubExerciseCounter"
 Website = "https://www.twitch.tv/Crimdahl"
 Description = "Tracks a count of subscription-related exercises."
 Creator = "Crimdahl"
-Version = "1.1.0"
+Version = "1.1.1"
 
 #   Define Global Variables <Required>
 ScriptPath = os.path.dirname(__file__)
@@ -161,7 +161,11 @@ def EventReceiverConnected(sender, e):
     if ScriptSettings.EnableDebug: Log("result: " + str(result))
     user = json.loads(result["response"])
     id = user["data"][0]["id"]
-
+    
+    if "Unauthorized" in str(result) and ScriptSettings.EnableChatPermissionErrors:
+            Post("SubExerciseCounter: Error 401 Unauthorized encountered listening for subscriptions. Please ensure you have a valid oAuth Token in the script settings.")
+    elif Parent.GetChannelName() in str(result) and ScriptSettings.EnableChatResponses:
+        Post("SubExerciseCounter: Subscription listener successfully connected.")
     if ScriptSettings.EnableDebug: Log("Event receiver connected, sending topics for channel id: " + id)
 
     EventReceiver.ListenToSubscriptions(id)
