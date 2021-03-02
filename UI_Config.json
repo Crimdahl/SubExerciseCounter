@@ -67,21 +67,21 @@
 	},
 	"EnableDebug": {
 		"type": "checkbox",
-		"value": false,
+		"value": True,
 		"label": "Enable Debug",
 		"tooltip": "Enable or disable debug logging.",
 		"group": "Output Settings"
 	},
 	"EnableChatResponses": {
 		"type": "checkbox",
-		"value": false,
+		"value": True,
 		"label": "Enable Chat Command Responses",
 		"tooltip": "Enable or disable optional chat responses to commands.",
 		"group": "Output Settings"
 	},
 	"EnableChatPermissionErrors": {
 		"type": "checkbox",
-		"value": false,
+		"value": True,
 		"label": "Enable Chat Permission Errors",
 		"tooltip": "Enable or disable chat responses to users that do not have sufficient privileges.",
 		"group": "Output Settings"
@@ -95,7 +95,7 @@
 	},
 	"EnableSubscriptionThanks": {
 		"type": "checkbox",
-		"value": false,
+		"value": True,
 		"label": "Enable Subscription Thank You",
 		"tooltip": "Enable or disable thank you responses to receiving a subscription.",
 		"group": "Output Settings"

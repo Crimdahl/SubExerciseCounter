@@ -30,9 +30,17 @@ as your stream key!
 
 -Twitch oAuth Token: Your Twitch oAuth token to authenticate the redemption listener. (No default)
 
--Enable Responses: Toggles the ability to post responses to your command directly in Twitch chat. (Default: True)
-
 -Enable Debug: Toggles the ability to post debug messages in the Chatbot Logs. (Default: True)
+
+-Enable Chat Responses: Toggles optional command responses. Currently, the Count Command response is mandatory, but the Reset Command response is optional. (Default: True)
+
+-Enable Chat Permission Errors: Toggles chat responses for when a user attempts to use a command without permission. (Default: True)
+
+-Enable Chat Live Errors: Toggles chat responses for when a user attempts to use a command and the channel is offline. (Default: False)
+
+-Enable Subscription Thanks: Toggles display of thank you message after receiving a subscription. (Default: True)
+
+-Thank You Message: The message that should be displayed as a thank you. Takes parameters: $channel, $exercise, $count. $channel is replaced with your channel name. $exercise is replaced by your exercise type. $count is replaced by a count of your pending exercises. (Default: "Thank you for the subscription! $channel's $exercise count is now at $count.")
 
 ### Commands
 -!<CountCommandName>: Displays the number of exercises you have pending.
