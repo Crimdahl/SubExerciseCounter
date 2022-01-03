@@ -14,38 +14,43 @@ as your stream key!
 
 ## Use
 ### Options
--Accept Commands Only When Live: Toggles the ability to respond to chat commands when offline. (Default: True)
+-Accept Commands Only When Live: Toggles the ability to respond to chat commands when offline. (Default: False)
+
+-Command Name: The name of the base command. Commands are invoked with !command subcommand. If you were to set this variable to "fitness", you would add 10 pushups by using the following: "!fitness add 10 pushups" (Default: Burpees)
 
 -Command Permissions: Sets the permissions required for a chatter to use the commands. (Default: Moderator)
 
--Count Command Name: Customizes the command used to display and modify your queue. (No Default)
+-Subscription Exercise Type: The type of exercise you wish to increment when receiving a subscription. (No Default)
 
--Reset Command Name: Customizes the command used to display and modify your queue. (No Default)
+-Subscription Exercise Increment: How many of the exercise you want to do after each subscription. (Default: 1)
 
--Type of Exercise: The type of exercise you wish to do after subs. (No Default)
-
--Increment Per Sub: How much of the exercise you want to do after each sub. (Default: 1)
+-Response on Subscription: The chat message to display after receiving a subscription. Empty = no message. Substitues "$channel" for your channel name, "$exercise" for your Subscription Exercise Type, and "$count" for the current number of your Subscription Exercise Type now in the queue. (Default: "")
 
 -Twitch Client ID: The Client ID received when registering the App. (Default: l6xhpee6j3ddawvg8wnol71sg832l6)
 
 -Twitch oAuth Token: Your Twitch oAuth token to authenticate the redemption listener. (No default)
 
--Enable Debug: Toggles the ability to post debug messages in the Chatbot Logs. (Default: True)
+-Auto-reconnection Interval: How long, in minutes, does the script go between auto reconnection attempts? (Default: 5)
 
--Enable Chat Responses: Toggles optional command responses. Currently, the Count Command response is mandatory, but the Reset Command response is optional. (Default: True)
+-Level of Chatbot Logging: Choose verbosity of chatbot logging. Higher levels include all lower levels. (Default: Info)
 
--Enable Chat Permission Errors: Toggles chat responses for when a user attempts to use a command without permission. (Default: True)
+-Enable File Logging: If enabled, will log all levels of logging to script_log.txt in the script directory in addition to the Streamlabs Chatbot script log, useful for later reference. (Default: True)
 
--Enable Chat Live Errors: Toggles chat responses for when a user attempts to use a command and the channel is offline. (Default: False)
-
--Enable Subscription Thanks: Toggles display of thank you message after receiving a subscription. (Default: True)
-
--Thank You Message: The message that should be displayed as a thank you. Takes parameters: $channel, $exercise, $count. $channel is replaced with your channel name. $exercise is replaced by your exercise type. $count is replaced by a count of your pending exercises. (Default: "Thank you for the subscription! $channel's $exercise count is now at $count.")
 
 ### Commands
--!<CountCommandName>: Displays the number of exercises you have pending.
-  
--!<ResetCommandName>: Resets your pending exercise count to 0.
+All commands begin with an exclamation mark, followed by your configured command name.
+
+-![Command Name]
+Using just the base command will display all of the exercises currently in your queue.
+
+-![Command Name] add [Integer] (Exercise Type)
+Adds the number of the specified exercise type to the queue. If no exercise type is supplied, it will add to your configured Subscription Exercise Type.
+
+-![Command Name] sub [Integer] (Exercise Type)
+Subtracts the number of the specified exercise type, if it exists. If no exercise type is supplied, it will subtract from your configured Subscription Exercise Type. If the new number of that exercise is equal or less than 0, the exercise is removed from the queue completely.
+
+-![Command Name] [reset/clear] (Exercise Type)
+Removes the specified exercise type from the queue, if it exists. If no exercise type is supplied, clears the entire exercise queue.
 
 ## Authors
 

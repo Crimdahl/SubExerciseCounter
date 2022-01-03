@@ -1,56 +1,65 @@
 {
 	"output_file": "settings.json",
-	"RunCommandsOnlyWhenLive": {
+	"btnreadme": {
+		"type": "button",
+		"label": "Open Readme",
+		"tooltip": "Opens the readme file.",
+		"wsevent": "",
+		"_comment": "Do not change the function name! Ever!!",
+		"function": "openreadme",
+		"group": ""
+	},
+	"run_only_when_live": {
 		"type": "checkbox",
 		"value": "true",
 		"label": "Accept Commands Only When Live",
 		"tooltip": "Indicates whether the script only accepts commands while you are live.",
 		"group": "Command Settings"
 	},
-	"CommandPermissions": {
-	        "type": "dropdown",
-	        "value": "Everyone",
-	        "items": ["Everyone","Regular","Subscriber","Moderator","Editor"],
-	        "label": "Command Permissions",
-	        "tooltip": "The permission level required to use script commands.",
+	"command_name": {
+		"type": "textbox",
+		"value": "exercise",
+		"label": "Command Name",
+		"tooltip": "What would you like the bot to detect as the command name after the exclamation mark?",
 		"group": "Command Settings"
-    	},
-	"CountCommandName": {
-	        "type": "textbox",
-	        "value": "burpeecount",
-	        "label": "Count Command Name",
-	        "tooltip": "The command name is ! then whatever is in this box.",
+	},
+	"command_permissions": {
+		"type": "dropdown",
+		"value": "Everyone",
+		"items": ["Everyone","Regular","Subscriber","Moderator","Editor"],
+		"label": "Command Permissions",
+		"tooltip": "The permission level required to use script commands.",
 		"group": "Command Settings"
-    	},
-	"ResetCommandName": {
-	        "type": "textbox",
-	        "value": "burpeereset",
-	        "label": "Reset Command Name",
-	        "tooltip": "The command name is ! then whatever is in this box.",
-		"group": "Command Settings"
-    	},
-	"ExerciseType": {
-	        "type": "textbox",
-	        "value": "burpee",
-	        "label": "Type of Exercise (Singular!)",
-	        "tooltip": "Which exercise would you like to have to do after subs?",
-		"group": "Exercise Settings"
-    	},
-	"IncrementAmount": {
-	        "type": "numberbox",
-	        "value": 1,
-	        "label": "Increment Per Sub",
-	        "tooltip": "How many exercise reps would you like to do after each sub?",
-		"group": "Exercise Settings"
-    	},
-	"ClientID": {
+	},
+	"subscription_exercise_type": {
+		"type": "textbox",
+		"value": "",
+		"label": "Subscription Exercise Type",
+		"tooltip": "Which exercise would you like to have to do after subs?",
+		"group": "Subscription Settings"
+	},
+	"subscription_exercise_increment": {
+		"type": "numberbox",
+		"value": 1,
+		"label": "Subscription Exercise Increment",
+		"tooltip": "How many exercise reps would you like to do after each sub?",
+		"group": "Subscription Settings"
+	},
+	"show_response_on_subscription": {
+		"type": "textbox",
+		"value": "",
+		"label": "Response on Subscription",
+		"tooltip": "Show a thank-you message. Blank = off. Parameters: $channel, $exercise, $count.",
+		"group": "Subscription Settings"
+	},
+	"client_id": {
 		"type": "textbox",
 		"value": "",
 		"label": "Twitch Client ID",
 		"tooltip": "Enter the client ID for your registered application.",
 		"group": "Twitch oAuth - KEEP HIDDEN"
 	},
-	"TwitchOAuthToken": {
+	"twitch_oauth_token": {
 		"type": "textbox",
 		"value": "",
 		"label": "Twitch oAuth Token",
@@ -65,55 +74,26 @@
 		"function": "GetToken",
 		"group": "Twitch oAuth - KEEP HIDDEN"
 	},
-	"EnableDebug": {
-		"type": "checkbox",
-		"value": true,
-		"label": "Enable Debug",
-		"tooltip": "Enable or disable debug logging.",
+	"reconnect_interval": {
+		"type": "numberbox",
+		"value": 5,
+		"label": "Auto-reconnection interval",
+		"tooltip": "How long, in minutes, does the script go between auto reconnection attempts?",
+		"group": "Twitch oAuth - KEEP HIDDEN"
+	},
+	"debug_level": {
+		"type": "dropdown",
+		"value": "Info",
+		"items": ["All","Debug","Info","Warn","Fatal","Nothing"],
+		"label": "Level of Chatbot Logging",
+		"tooltip": "Choose verbosity of chatbot logging. Higher levels include all lower levels.",
 		"group": "Output Settings"
 	},
-	"EnableChatResponses": {
-		"type": "checkbox",
-		"value": true,
-		"label": "Enable Chat Command Responses",
-		"tooltip": "Enable or disable optional chat responses to commands, such as with the Reset command.",
-		"group": "Output Settings"
-	},
-	"EnableChatPermissionErrors": {
-		"type": "checkbox",
-		"value": true,
-		"label": "Enable Chat Permission Errors",
-		"tooltip": "Enable or disable errors in chat for when users use the commands without sufficient privileges.",
-		"group": "Output Settings"
-	},
-	"EnableChatLiveErrors": {
+	"enable_logging_to_file": {
 		"type": "checkbox",
 		"value": false,
-		"label": "Enable Chat Live Errors",
-		"tooltip": "Enable or disable errors in chat resulting from the stream being offline.",
+		"label": "Enable File Logging",
+		"tooltip": "If enabled, will log all levels of logging to script_log.txt in the script directory in addition to the Streamlabs Chatbot script log, useful for later reference.",
 		"group": "Output Settings"
-	},
-	"EnableSubscriptionThanks": {
-		"type": "checkbox",
-		"value": true,
-		"label": "Enable Subscription Thank You",
-		"tooltip": "Enable or disable thank you messages to receiving a subscription.",
-		"group": "Output Settings"
-	},
-	"ThankYouMessage": {
-		"type": "textbox",
-		"value": "Thank you for the subscription! $channel's $exercise count is now at $count.",
-		"label": "Thank You Message",
-		"tooltip": "Customize the thank you message. Parameters: $channel, $exercise, $count.",
-		"group": "Output Settings"
-	},
-	"btnreadme": {
-		"type": "button",
-		"label": "Open Readme",
-		"tooltip": "Opens the readme file.",
-		"wsevent": "",
-		"_comment": "Do not change the function name! Ever!!",
-		"function": "openreadme",
-		"group": ""
 	}
 }
