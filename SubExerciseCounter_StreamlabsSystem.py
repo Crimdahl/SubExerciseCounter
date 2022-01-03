@@ -5,8 +5,10 @@ import sys
 sys.platform = "win32"
 import codecs, json, os, re, io, threading, datetime, clr, math
 clr.AddReference("IronPython.Modules.dll")
-clr.AddReferenceToFileAndPath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "References", "TwitchLib.PubSub.dll"))
+clr.AddReferenceToFileAndPath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "References",
+                                           "TwitchLib.PubSub.dll"))
 from TwitchLib.PubSub import TwitchPubSub
+from datetime import datetime, timedelta
 
 #   Script Information <Required>
 ScriptName = "SubExerciseCounter"
@@ -16,228 +18,385 @@ Creator = "Crimdahl"
 Version = "1.1.2"
 
 #   Define Global Variables <Required>
-ScriptPath = os.path.dirname(__file__)
-SettingsPath = os.path.join(ScriptPath, "settings.json")
-ReadmePath = os.path.join(ScriptPath, "Readme.md")
-ScriptSettings = None
-ExerciseCount = 0
+script_path = os.path.dirname(__file__)
+settings_path = os.path.join(script_path, "settings.json")
+readme_path = os.path.join(script_path, "Readme.md")
+log_file = os.path.join(script_path, "script_log.txt")
+script_settings = None
+exercises = {}
 
-EventReceiver = None
-ThreadQueue = []
-Thread = None
-PlayNextAt = datetime.datetime.now()
+twitch_event_receiver = None
+twitch_event_receiver_queue = []
+thread = None
+tick_timer = datetime.now() + timedelta(minutes=5)
+attempt_reconnect = True
+
 
 # Define Settings. If there is no settings file created, then use default values in else statement.
 class Settings(object):
-    def __init__(self, SettingsPath=None):
-        if SettingsPath and os.path.isfile(SettingsPath):
-            with codecs.open(SettingsPath, encoding="utf-8-sig", mode="r") as f:
+    def __init__(self, settings_path=None):
+        if settings_path and os.path.isfile(settings_path):
+            with codecs.open(settings_path, encoding="utf-8-sig", mode="r") as f:
                 self.__dict__ = json.load(f, encoding="utf-8")
         else:
-            #Output Settings
-            self.EnableDebug = True
-            self.EnableChatResponses = True
-            self.EnableChatPermissionErrors = True
-            self.EnableChatLiveErrors = False
-            self.EnableSubscriptionThanks = True
-            self.ThankYouMessage = "Thank you for the subscription! $channel's $exercise count is now at $count."
-            self.RunCommandsOnlyWhenLive = True
+            # General Settings
+            self.run_only_when_live = False
+            self.command_name = "exercise"
 
-            #Command Settings
-            self.CommandPermissions = "Moderator"
-            self.ExerciseType = "burpee"
-            self.IncrementAmount = 1
-            self.CountCommandName = "burpeecount"
-            self.ResetCommandName = "burpeereset"
+            # Output Settings
+            self.debug_level = "Info"
+            self.enable_logging_to_file = True
 
-            #Twitch Settings
-            self.ClientID = "l6xhpee6j3ddawvg8wnol71sg832l6"
-            self.TwitchOAuthToken = ""
+            # Command Settings
+            self.command_permissions = "Moderator"
+
+            # Subscription Settings
+            self.reconnect_interval = 5
+            self.client_id = "l6xhpee6j3ddawvg8wnol71sg832l6"
+            self.twitch_oauth_token = ""
+            self.response_on_subscription = ""
+            self.subscription_exercise_type = "Burpees"
+            self.subscription_exercise_increment = 1
 
     def Reload(self, jsondata):
+        log("Settings reloaded.",
+            LoggingLevel.str_to_int.get("Info"))
         self.__dict__ = json.loads(jsondata, encoding="utf-8")
         return
 
-    def Save(self, SettingsPath):
+    def Save(self, settings_path):
         try:
-            with codecs.open(SettingsPath, encoding="utf-8-sig", mode="w+") as f:
+            with codecs.open(settings_path, encoding="utf-8-sig", mode="w+") as f:
                 json.dump(self.__dict__, f, encoding="utf-8")
         except:
-            Log("Failed to save settings to the file. Fix error and try again")
+            log("Failed to save settings to the file. Fix error and try again",
+                LoggingLevel.str_to_int.get("Fatal"))
         return
+
+
+class LoggingLevel:
+    str_to_int = {
+        "All": 1,
+        "Debug": 2,
+        "Info": 3,
+        "Warn": 4,
+        "Fatal": 5,
+        "Nothing": 6
+    }
+    int_to_string = {
+        1: "All",
+        2: "Debug",
+        3: "Info",
+        4: "Warn",
+        5: "Fatal",
+        6: "Nothing"
+    }
+
+    def __str__(self):
+        return str(self.value)
+
 
 #   Process messages <Required>
 def Execute(data):
-    if data.Message == "!" + ScriptSettings.CountCommandName:
-        if ScriptSettings.RunCommandsOnlyWhenLive and not Parent.IsLive():
-            if ScriptSettings.EnableChatLiveErrors: Post("Command ignored: the channel is currently offline.")
-            if ScriptSettings.EnableDebug: Log("Command ignored: the channel is currently offline.")
-        elif not Parent.HasPermission(data.User, ScriptSettings.CommandPermissions, ""):
-            if ScriptSettings.EnableChatPermissionErrors: Post("Sorry, " + data.UserName + ", you do not have permission to use the Count command.")
-            if ScriptSettings.EnableDebug: Log(data.UserName + " has insufficient permissions to use the Count command.")
+    if str(data.GetParam(0)).lower() == "!" + script_settings.command_name:
+        if script_settings.run_only_when_live and not Parent.IsLive():
+            return
+
+        if Parent.HasPermission(data.User, script_settings.command_permissions, ""):
+            if data.GetParamCount() == 1:
+                # Display current exercises
+                global exercises
+                if len(exercises) == 0:
+                    post("You have no exercises in the queue.")
+                else:
+                    response = "Exercises in your queue: "
+                    for k, v in exercises.items():
+                        response = response + str(v) + " " + str(k) + ", "
+                    post(response[:len(response) - 2] + ".")
+                return
+            else:
+                subcommand = data.GetParam(1)
+
+            if subcommand == "add" or subcommand == "sub":
+                # Command should look like: !exercise [add or sub] [integer] (exercise type)
+                #   Adds/subtracts the amount and type of exercise
+                if data.GetParamCount() >= 2:
+                    # Subcommand was supplied at least one argument. Check if the first argument is an integer
+                    exercise_amount = data.GetParam(2)
+                    try:
+                        if not float(exercise_amount).is_integer():
+                            raise ValueError("The supplied number was not an integer.")
+                        # The subcommand's first argument is an integer. Check the subcommand and, if necessary,
+                        #   convert the number into a negative
+                        if int(exercise_amount) == 0:
+                            post("You won't be healthy like that, I'll tell ya hwhat.")
+                            return
+
+                        if subcommand == "sub":
+                            exercise_amount = 0 - int(exercise_amount)
+
+                        # Now we check to see if an exercise type was supplied, indicated by params 3+
+                        if data.GetParamCount() >= 3:
+                            # Exercise type supplied. Get everything after parameter 2.
+                            exercise_type = data.Message[data.Message.rindex(data.GetParam(2)) +
+                                                         len(data.GetParam(2)) + 1:].title()
+                            log("Add/sub subcommand received second argument: " +
+                                str(exercise_type), LoggingLevel.str_to_int.get("Debug"))
+                        else:
+                            # The subcommand was not supplied an exercise type.
+                            exercise_type = script_settings.subscription_exercise_type.title()
+                            log("Add/sub subcommand using default exercise: " +
+                                str(exercise_type), LoggingLevel.str_to_int.get("Debug"))
+
+                        global exercises
+                        incrementing = int(exercise_amount) > 0
+                        decrementing = int(exercise_amount) < 0
+                        if exercise_type in exercises.keys():
+                            # If we're decrementing an exercise and it removes all of that exercise, remove the
+                            #   exercise from the dictionary
+                            if decrementing and abs(int(exercise_amount)) >= int(exercises[exercise_type]):
+                                exercises.pop(exercise_type)
+                                post(exercise_type + " cleared.")
+                            else:
+                                exercises[exercise_type] = exercises[exercise_type] + int(exercise_amount)
+                                if incrementing:
+                                    post(exercise_type + " incremented by " +
+                                         str(exercise_amount) + ".")
+                                else:
+                                    post(exercise_type + " decremented by " +
+                                         str(abs(int(exercise_amount))) + ".")
+                        else:
+                            # If the exercise exists, add it if we're incrementing, otherwise do nothing.
+                            if incrementing:
+                                exercises[exercise_type] = int(exercise_amount)
+                                post(exercise_type + " incremented by " +
+                                     str(exercise_amount) + ".")
+                            else:
+                                post("There were no " + exercise_type + " in the exercise queue.")
+                        return
+                    except ValueError:
+                        # Command was supplied an invalid first argument.
+                        log("Add/sub subcommand was supplied an invalid first argument: " +
+                            str(exercise_amount), LoggingLevel.str_to_int.get("Warn"))
+                        pass
+                # If the command has reached this point, there was a problem. Display the command usage in chat.
+                if subcommand == "add":
+                    post("Command usage: !exercise add [integer] (exercise type)")
+                elif subcommand == "sub":
+                    post("Command usage: !exercise sub [integer] (exercise type)")
+                return
+
+            if subcommand == "reset" or subcommand == "clear":
+                # Command should look like: !exercise reset (exercise type)
+                #   Clears the supplied exercise, or all exercises if no argument is supplied
+                global exercises
+                if data.GetParamCount() >= 3:
+                    # An exercise type was supplied. Get the exercise from the message.
+                    exercise_type = data.Message[data.Message.rindex(data.GetParam(1)) +
+                                                 len(data.GetParam(1)) + 1:].title()
+
+                    # Remove the exercises if they exist
+                    if exercise_type in exercises.keys():
+                        exercises.pop(exercise_type)
+                    else:
+                        log("Reset subcommand was supplied an exercise type that did not exist: " +
+                            str(exercise_type), LoggingLevel.str_to_int.get("Warn"))
+
+                    # Regardless of the outcome, I send a success message
+                    post(str(exercise_type).title() + " have been cleared.")
+                    return
+                else:
+                    # No exercise type was supplied. Clear the exercises dictionary.
+                    exercises = {}
+                    post("All exercises have been cleared.")
+                    return
         else:
-            global ExerciseCount
-            Post("Your current " + ScriptSettings.ExerciseType + " count from subscriptions is " + str(ExerciseCount) + ".")
-            if ScriptSettings.EnableDebug: Log("Count command called. " + str.capitalize(ScriptSettings.ExerciseType) + " count is " + str(ExerciseCount) + ".")
-    elif data.Message == "!" + ScriptSettings.ResetCommandName:
-        if ScriptSettings.RunCommandsOnlyWhenLive and not Parent.IsLive():
-            if ScriptSettings.EnableChatLiveErrors: Post("Command ignored: the channel is currently offline.")
-            if ScriptSettings.EnableDebug: Log("Command ignored: the channel is currently offline.")
-        elif not Parent.HasPermission(data.User, ScriptSettings.CommandPermissions, ""):
-            if ScriptSettings.EnableChatPermissionErrors: Post("Sorry, " + data.UserName + ", you do not have permission to use the Reset command.")
-            if ScriptSettings.EnableDebug: Log(data.UserName + " has insufficient permissions to use the Reset command.")
-        else:
-            global ExerciseCount
-            ExerciseCount = 0
-            if ScriptSettings.EnableChatResponses: Post(str.capitalize(ScriptSettings.ExerciseType) + " count reset.")
-            if ScriptSettings.EnableDebug: Log("Reset command called. " + ScriptSettings.ExerciseType + " count reset.")
-    return
+            post("Sorry, " + data.UserName + ", you do not have permission to use that command.")
+            log(data.UserName + " has insufficient permissions to use that command.",
+                LoggingLevel.str_to_int.get("Warn"))
+        return
+
 
 #   [Required] Tick method (Gets called during every iteration even when there is no incoming data)
 def Tick():
-    global PlayNextAt
-    if PlayNextAt > datetime.datetime.now():
-        return
+    # Every x minutes, attempt to connect to Twitch
+    global tick_timer
+    if tick_timer <= datetime.now():
+        tick_timer = datetime.now() + timedelta(minutes=script_settings.reconnect_interval)
+        global twitch_event_receiver
+        if twitch_event_receiver is None:
+            post("ExerciseCounter is attempting to reconnect to the channel to listen for subscriptions.")
+            Start()
 
-    global Thread
-    if Thread and Thread.isAlive() == False:
-        Thread = None
+    global thread
+    if thread and not thread.isAlive():
+        thread = None
 
-    if Thread == None and len(ThreadQueue) > 0:
-        if ScriptSettings.EnableDebug: Log("Starting new thread. " + str(PlayNextAt))
-        Thread = ThreadQueue.pop(0)
-        Thread.start()
+    if not thread and len(twitch_event_receiver_queue) > 0:
+        log("Starting new thread. " + str(datetime.now()),
+            LoggingLevel.str_to_int.get("Debug"))
+        thread = twitch_event_receiver_queue.pop(0)
+        thread.start()
 
     return
-    
+
+
 #   Reload settings and receiver when clicking Save Settings in the Chatbot
 def ReloadSettings(jsonData):
-    if ScriptSettings.EnableDebug: Log("Saving settings.")
-    global EventReceiver
+    log("Saving settings.", LoggingLevel.str_to_int.get("Info"))
+    global twitch_event_receiver
     try:
-        #Reload settings
-        ScriptSettings.__dict__ = json.loads(jsonData)
-        ScriptSettings.Save(SettingsPath)
+        # Reload settings
+        script_settings.__dict__ = json.loads(jsonData)
+        script_settings.Save(settings_path)
 
         Unload()
         Start()
-        if ScriptSettings.EnableDebug: Log("Settings saved successfully")
+        log("Settings saved successfully", LoggingLevel.str_to_int.get("Info"))
     except Exception as e:
-        if ScriptSettings.EnableDebug: Log(str(e))
+        log(str(e), LoggingLevel.str_to_int.get("Fatal"))
 
     return
+
 
 #   Init called on script load. <Required>
 def Init():
-    #Initialize Settings
-    global ScriptSettings
-    ScriptSettings = Settings(SettingsPath)
-    ScriptSettings.Save(SettingsPath)
+    # Initialize Settings
+    global script_settings
+    script_settings = Settings(settings_path)
+    script_settings.Save(settings_path)
 
-    if ScriptSettings.EnableDebug: Log("Exercise tracking script loaded.")
-    #Initialize Receiver
+    log("Exercise tracking script loaded.", LoggingLevel.str_to_int.get("Debug"))
+    # Initialize Receiver
     Start()
     return
 
+
 def Start():
-    if ScriptSettings.EnableDebug: Log("Starting receiver")
+    log("Starting receiver", LoggingLevel.str_to_int.get("Debug"))
 
-    global EventReceiver
-    EventReceiver = TwitchPubSub()
-    EventReceiver.OnPubSubServiceConnected += EventReceiverConnected
-    EventReceiver.OnChannelSubscription += EventReceiverNewSubscription
-
-    EventReceiver.Connect()
+    global twitch_event_receiver
+    twitch_event_receiver = TwitchPubSub()
+    twitch_event_receiver.OnPubSubServiceConnected += EventReceiverConnected
+    twitch_event_receiver.OnChannelSubscription += EventReceiverNewSubscription
+    twitch_event_receiver.OnPubSubServiceClosed += EventReceiverDisconnected
+    twitch_event_receiver.Connect()
     return
+
 
 def EventReceiverConnected(sender, e):
-    if ScriptSettings.EnableDebug: Log("Event receiver connecting")
+    log("Event receiver connecting.", LoggingLevel.str_to_int.get("Debug"))
     #  Get Channel ID for Username
     headers = {
-        "Client-ID": ScriptSettings.ClientID,
-        "Authorization": "Bearer " + ScriptSettings.TwitchOAuthToken
+        "Client-ID": script_settings.client_id,
+        "Authorization": "Bearer " + script_settings.twitch_oauth_token
     }
-    result = json.loads(Parent.GetRequest("https://api.twitch.tv/helix/users?login=" + Parent.GetChannelName(), headers))
+    result = json.loads(Parent.GetRequest("https://api.twitch.tv/helix/users?login=" +
+                                          Parent.GetChannelName(), headers))
 
-    if "Unauthorized" in str(result) and ScriptSettings.EnableChatPermissionErrors:
-        Post("SubExerciseCounter: Error 401 (Unauthorized) starting subscription listener. Please ensure you have a valid oAuth Token in the script settings.")
-    elif Parent.GetChannelName() in str(result) and ScriptSettings.EnableChatResponses:
-        Post("SubExerciseCounter: Subscription listener successfully connected.")
-    if ScriptSettings.EnableDebug: Log("result: " + str(result))
+    if "error" in result.keys():
+        if result["error"] == "Unauthorized":
+            post("ExerciseCounter is not authorized to listen for subscriptions on this channel. "
+                 "Please ensure you have a valid oAuth key in the script settings.")
+        else:
+            post("ExerciseCounter: Error connecting to channel. See logs for details.")
+            log("oAuth connection attempt error: " + str(result["error"]), LoggingLevel.str_to_int.get("Fatal"))
+
+    log("Result of oAuth connection attempt: " + str(result), LoggingLevel.str_to_int.get("Debug"))
+
+    if "error" in result.keys():
+        # The receiver failed to connect. Delete the object so the script can retry later.
+        log("ExerciseCounter Error connecting to channel: " +
+            str(result["error"]), LoggingLevel.str_to_int.get("Fatal"))
+        global twitch_event_receiver
+        twitch_event_receiver = None
+        return
 
     user = json.loads(result["response"])
-    id = user["data"][0]["id"]
+    user_id = user["data"][0]["id"]
     
-    if ScriptSettings.EnableDebug: Log("Event receiver connected, sending topics for channel id: " + id)
+    log("Connection to Twitch channel " + Parent.GetChannelName() +
+        " established. Now listening for new subscriptions.",
+        LoggingLevel.str_to_int.get("Info"))
 
-    EventReceiver.ListenToSubscriptions(id)
-    EventReceiver.SendTopics(ScriptSettings.TwitchOAuthToken)
+    twitch_event_receiver.ListenToSubscriptions(user_id)
+    twitch_event_receiver.SendTopics(script_settings.twitch_oauth_token)
+    post("ExerciseCounter: Connection to Twitch channel '" + Parent.GetChannelName() +
+         "' established.")
     return
+
+
+def EventReceiverDisconnected(sender, e):
+    if e:
+        post("ExerciseCounter: Connection to Twitch lost. See logs for error message.")
+        log("Disconnect error: " + str(e), LoggingLevel.str_to_int.get("Fatal"))
+
 
 def EventReceiverNewSubscription(sender, e):
-    if ScriptSettings.EnableDebug: Log("Event receiver received new subscription notification.")
+    log("Event receiver received new subscription notification.",
+        LoggingLevel.str_to_int.get("Info"))
 
-    ThreadQueue.append(threading.Thread(target=NewSubscriptionWorker))
+    twitch_event_receiver_queue.append(threading.Thread(target=NewSubscriptionWorker))
+
 
 def NewSubscriptionWorker():
-    if ScriptSettings.EnableDebug: Log("New subscription received. Incrementing exercise count.")
-    global ExerciseCount
-    ExerciseCount = ExerciseCount + ScriptSettings.IncrementAmount
-    if ScriptSettings.EnableSubscriptionThanks:
-        message = ScriptSettings.ThankYouMessage
-        message = message.replace("$channel", Parent.GetChannelName())
-        message = message.replace("$exercise", ScriptSettings.ExerciseType)
-        message = message.replace("$count", str(ExerciseCount))
-        Post(message)
+    log("New subscription received. Incrementing exercise count.",
+        LoggingLevel.str_to_int.get("Info"))
+    global exercises
+    exercise_amount = script_settings.subscription_exercise_increment
+    if int(exercise_amount) > 0:
+        exercise_type = script_settings.subscription_exercise_type
+        if exercise_type in exercises.keys():
+            exercises[exercise_type] = exercises[exercise_type] + int(exercise_amount)
+        else:
+            exercises[exercise_type] = int(exercise_amount)
 
-    global PlayNextAt
-    PlayNextAt = datetime.datetime.now() + datetime.timedelta(0, 0)
+    if not script_settings.response_on_subscription == "":
+        message = script_settings.response_on_subscription
+        message = message.replace("$channel", Parent.GetChannelName())
+        message = message.replace("$exercise", script_settings.subscription_exercise_type)
+        message = message.replace("$count", str(exercises[exercise_type]))
+        post(message)
     return
+
 
 def Unload():
     # Disconnect EventReceiver cleanly
     try:
-        global EventReceiver
-        if EventReceiver:
-            EventReceiver.Disconnect()
-            EventReceiver = None
+        global twitch_event_receiver
+        if twitch_event_receiver:
+            twitch_event_receiver.Disconnect()
+            twitch_event_receiver = None
     except:
-        if ScriptSettings.EnableDebug: Log("Event receiver already disconnected")
-
+        log("Event receiver already disconnected", LoggingLevel.str_to_int.get("Warn"))
     return
+
 
 #   Opens readme file <Optional - DO NOT RENAME>
-def openreadme():
-    os.startfile(ReadmePath)
+def open_readme():
+    os.startfile(readme_path)
     return
+
 
 #   Opens Twitch.TV website to ask permissions
 def GetToken(): 
-    os.startfile("https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=" + ScriptSettings.ClientID + "&redirect_uri=https://twitchapps.com/tokengen/&scope=channel:read:subscriptions&force_verify=true")
+    os.startfile("https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=" + script_settings.client_id +
+                 "&redirect_uri=https://twitchapps.com/tokengen/&scope=channel:read:subscriptions&force_verify=true")
     return
 
+
 #   Helper method to log
-def Log(message): 
-    Parent.Log(ScriptName, message)
+def log(message, level=LoggingLevel.str_to_int.get("All")):
+    if script_settings.enable_logging_to_file:
+        global log_file
+        file = open(log_file, "a+")
+        file.writelines(str(datetime.now()).ljust(26) + " " + str(LoggingLevel.int_to_string.get(level) + ":").ljust(
+            10) + message + "\n")
+        file.close()
+    if LoggingLevel.str_to_int.get(script_settings.debug_level) <= level:
+        Parent.Log(ScriptName, "(" + str(LoggingLevel.int_to_string.get(level)) + ") " + message)
+
 
 #   Helper method to post to Twitch Chat
-def Post(message):
+def post(message):
     Parent.SendStreamMessage(message)
-
-def GetAttribute(attribute, message):
-    # if str(message).index(str(attribute)) > -1:
-        attribute = attribute.lower() + ":"
-        #The start index of the attribute begins at the end of the attribute designator, such as "game:"
-        try:
-            index_of_beginning_of_attribute = message.lower().index(attribute) + len(attribute)
-        except ValueError as e:
-            raise e
-        #The end index of the attribute is at the last space before the next attribute designator, or at the end of the message
-        try:
-            index_of_end_of_attribute = message[index_of_beginning_of_attribute:index_of_beginning_of_attribute + message[index_of_beginning_of_attribute:].index(":")].rindex(" ")
-        except ValueError:
-            #If this error is thrown, the end of the message was hit, so just return all of the remaining message
-            return message[index_of_beginning_of_attribute:].strip()
-        return message[index_of_beginning_of_attribute:index_of_beginning_of_attribute + index_of_end_of_attribute].strip().strip(",")
-    # else:
-    #     raise AttributeError(str(attribute) + " was not found in the supplied information.")
