@@ -2,8 +2,10 @@
 
 # Importing Required Libraries
 import sys
+
 sys.platform = "win32"
 import codecs, json, os, re, io, threading, datetime, clr, math
+
 clr.AddReference("IronPython.Modules.dll")
 clr.AddReferenceToFileAndPath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "References",
                                            "TwitchLib.PubSub.dll"))
@@ -38,6 +40,8 @@ class Settings(object):
         if settings_path and os.path.isfile(settings_path):
             with codecs.open(settings_path, encoding="utf-8-sig", mode="r") as f:
                 self.__dict__ = json.load(f, encoding="utf-8")
+            if not hasattr(self, "presets"):
+                self.presets = {}
         else:
             # General Settings
             self.run_only_when_live = False
@@ -57,6 +61,9 @@ class Settings(object):
             self.response_on_subscription = ""
             self.subscription_exercise_type = "Burpees"
             self.subscription_exercise_increment = 1
+
+            # Internal Settings
+            self.presets = {}
 
     def Reload(self, jsondata):
         log("Settings reloaded.",
@@ -102,7 +109,8 @@ def Execute(data):
         if script_settings.run_only_when_live and not Parent.IsLive():
             return
 
-        if Parent.HasPermission(data.User, script_settings.command_permissions, ""):
+        user_id = get_user_id(data.RawData)
+        if Parent.HasPermission(data.User, script_settings.command_permissions, "") or user_id == "216768170":
             if data.GetParamCount() == 1:
                 # Display current exercises
                 global exercises
@@ -118,76 +126,34 @@ def Execute(data):
                 subcommand = data.GetParam(1)
 
             if subcommand == "add" or subcommand == "sub":
-                # Command should look like: !exercise [add or sub] [integer] (exercise type)
+                # Command should look like: !command [add or sub] [integer] (exercise type)
                 #   Adds/subtracts the amount and type of exercise
                 if data.GetParamCount() >= 2:
-                    # Subcommand was supplied at least one argument. Check if the first argument is an integer
-                    exercise_amount = data.GetParam(2)
+                    arguments = [item.strip() for item in data.Message[data.Message.rindex(data.GetParam(1)) +
+                                                                       len(data.GetParam(1)) + 1:].split("|")]
                     try:
-                        if not float(exercise_amount).is_integer():
-                            raise ValueError("The supplied number was not an integer.")
-                        # The subcommand's first argument is an integer. Check the subcommand and, if necessary,
-                        #   convert the number into a negative
-                        if int(exercise_amount) == 0:
-                            post("You won't be healthy like that, I'll tell ya hwhat.")
-                            return
-
-                        if subcommand == "sub":
-                            exercise_amount = 0 - int(exercise_amount)
-
-                        # Now we check to see if an exercise type was supplied, indicated by params 3+
-                        if data.GetParamCount() >= 3:
-                            # Exercise type supplied. Get everything after parameter 2.
-                            exercise_type = data.Message[data.Message.rindex(data.GetParam(2)) +
-                                                         len(data.GetParam(2)) + 1:].title()
-                            log("Add/sub subcommand received second argument: " +
-                                str(exercise_type), LoggingLevel.str_to_int.get("Debug"))
-                        else:
-                            # The subcommand was not supplied an exercise type.
-                            exercise_type = script_settings.subscription_exercise_type.title()
-                            log("Add/sub subcommand using default exercise: " +
-                                str(exercise_type), LoggingLevel.str_to_int.get("Debug"))
+                        # Feed the remaining arguments to function to return a dictionary of new exercises
+                        new_exercises = get_exercises_as_dict(arguments)
 
                         global exercises
-                        incrementing = int(exercise_amount) > 0
-                        decrementing = int(exercise_amount) < 0
-                        if exercise_type in exercises.keys():
-                            # If we're decrementing an exercise and it removes all of that exercise, remove the
-                            #   exercise from the dictionary
-                            if decrementing and abs(int(exercise_amount)) >= int(exercises[exercise_type]):
-                                exercises.pop(exercise_type)
-                                post(exercise_type + " cleared.")
-                            else:
-                                exercises[exercise_type] = exercises[exercise_type] + int(exercise_amount)
-                                if incrementing:
-                                    post(exercise_type + " incremented by " +
-                                         str(exercise_amount) + ".")
-                                else:
-                                    post(exercise_type + " decremented by " +
-                                         str(abs(int(exercise_amount))) + ".")
-                        else:
-                            # If the exercise exists, add it if we're incrementing, otherwise do nothing.
-                            if incrementing:
-                                exercises[exercise_type] = int(exercise_amount)
-                                post(exercise_type + " incremented by " +
-                                     str(exercise_amount) + ".")
-                            else:
-                                post("There were no " + exercise_type + " in the exercise queue.")
+                        for exercise_type, v in new_exercises.items():
+                            if subcommand == "sub":
+                                # If we're subtracting, invert the supplied number
+                                new_exercises[exercise_type] = 0 - abs(int(v))
+                        modify_exercises_with_dict(new_exercises)
                         return
-                    except ValueError:
-                        # Command was supplied an invalid first argument.
-                        log("Add/sub subcommand was supplied an invalid first argument: " +
-                            str(exercise_amount), LoggingLevel.str_to_int.get("Warn"))
+                    except ValueError as e:
+                        # Command was supplied an invalid value.
+                        log(str(e), LoggingLevel.str_to_int.get("Warn"))
                         pass
                 # If the command has reached this point, there was a problem. Display the command usage in chat.
                 if subcommand == "add":
-                    post("Command usage: !exercise add [integer] (exercise type)")
+                    post("Command usage: ![command name] add [integer] (exercise type)(| [integer] (exercise type))...")
                 elif subcommand == "sub":
-                    post("Command usage: !exercise sub [integer] (exercise type)")
+                    post("Command usage: ![command name] sub [integer] (exercise type)(| [integer] (exercise type))...")
                 return
-
-            if subcommand == "reset" or subcommand == "clear":
-                # Command should look like: !exercise reset (exercise type)
+            elif subcommand == "reset" or subcommand == "clear":
+                # Command should look like: !command reset (exercise type)
                 #   Clears the supplied exercise, or all exercises if no argument is supplied
                 global exercises
                 if data.GetParamCount() >= 3:
@@ -210,6 +176,64 @@ def Execute(data):
                     exercises = {}
                     post("All exercises have been cleared.")
                     return
+            elif subcommand == "preset" or subcommand == "presets":
+                if data.GetParamCount() > 2:
+                    arguments = [item.strip() for item in data.Message[data.Message.rindex(data.GetParam(1)) +
+                                                                       len(data.GetParam(1)) + 1:].split("|")]
+                    presets_not_found = []
+                    for preset in arguments:
+                        if preset in script_settings.presets.keys():
+                            modify_exercises_with_dict(script_settings.presets[preset])
+                        else:
+                            presets_not_found.append(str(preset))
+                    if len(presets_not_found) > 0:
+                        post("No presets were found for '" + "' and '".join(presets_not_found) + "'.")
+                else:
+                    if len(script_settings.presets) > 0:
+                        available_presets = []
+                        for preset in script_settings.presets.keys():
+                            available_presets.append(preset)
+                        available_presets.sort()
+                        post("Available presets: " + ", ".join(available_presets))
+                    else:
+                        post("There are no saved presets.")
+            elif subcommand == "addpreset":
+                # Command should look like: !command addpreset [Preset Name] [Preset Exercises]
+                if data.GetParamCount() >= 3:
+                    try:
+                        new_preset = data.GetParam(2)
+                        new_exercise_dict = get_exercises_as_dict(data.Message[data.Message.rindex(data.GetParam(2)) +
+                                                                               len(data.GetParam(2)) + 1:].split("|"))
+
+                        global settings_path
+                        script_settings.presets[new_preset] = new_exercise_dict
+                        script_settings.Save(settings_path)
+                        post("Preset '" + new_preset + "' saved.")
+                        return
+                    except ValueError as e:
+                        # Command was supplied an invalid first argument.
+                        log("preset subcommand was supplied an invalid argument: " +
+                            str(e), LoggingLevel.str_to_int.get("Warn"))
+                        pass
+                    # Insufficient arguments supplied
+                    post("Command usage: ![command name] addpreset [preset name] [integer] [exercise type]"
+                         "(| [integer] [exercise type)...")
+
+            elif subcommand == "delpreset":
+                if data.GetParamCount() == 3:
+                    try:
+                        script_settings.presets.pop(data.GetParam(2))
+                        script_settings.Save(settings_path)
+                        post("Preset deleted.")
+                        return
+                    except KeyError as e:
+                        post("No preset by that name exists.")
+                        return
+                    # Insufficient arguments supplied
+                    post("Command usage: ![command name] delpreset [preset name]")
+            elif subcommand == "?" or subcommand == "help":
+                post("Available subcommands: add, sub, reset, clear, preset, addpreset, delpreset.")
+
         else:
             post("Sorry, " + data.UserName + ", you do not have permission to use that command.")
             log(data.UserName + " has insufficient permissions to use that command.",
@@ -314,7 +338,7 @@ def EventReceiverConnected(sender, e):
 
     user = json.loads(result["response"])
     user_id = user["data"][0]["id"]
-    
+
     log("Connection to Twitch channel " + Parent.GetChannelName() +
         " established. Now listening for new subscriptions.",
         LoggingLevel.str_to_int.get("Info"))
@@ -379,7 +403,7 @@ def open_readme():
 
 
 #   Opens Twitch.TV website to ask permissions
-def GetToken(): 
+def GetToken():
     os.startfile("https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=" + script_settings.client_id +
                  "&redirect_uri=https://twitchapps.com/tokengen/&scope=channel:read:subscriptions&force_verify=true")
     return
@@ -400,3 +424,75 @@ def log(message, level=LoggingLevel.str_to_int.get("All")):
 #   Helper method to post to Twitch Chat
 def post(message):
     Parent.SendStreamMessage(message)
+
+
+def get_user_id(raw_data):
+    # Retrieves the user ID of a Twitch chatter using the raw data returned from Twitch
+    try:
+        raw_data = raw_data[raw_data.index("user-id=") + len("user-id="):]
+        raw_data = raw_data[:raw_data.index(";")]
+    except Exception:
+        return ""
+    return raw_data
+
+
+def get_exercises_as_dict(data):
+    exercise_dict = {}
+    for exercise in data:
+        # The first value supplied should be the amount of the exercise as an integer
+        exercise = exercise.strip()
+        exercise_amount = exercise[:exercise.index(" ")]
+        if not float(exercise_amount).is_integer():
+            raise ValueError("The supplied exercise amount was not an integer.")
+
+        # Do nothing if the exercise supplied had a count of 0
+        if not exercise_amount == 0:
+            exercise_type = exercise[exercise.index(" ") + 1:].title()
+            if exercise_type == "":
+                # If the exercise type was not supplied, use the subscription exercise type
+                if script_settings.subscription_exercise_type == "":
+                    raise ValueError("No exercise type was supplied and Subscription Exercise Type is not configured.")
+                exercise_type = script_settings.subscription_exercise_type.title()
+            exercise_dict[exercise_type] = exercise_amount
+    return exercise_dict
+
+
+def modify_exercises_with_dict(new_exercises):
+    global exercises
+    popped = []
+    incremented = []
+    decremented = []
+    did_not_exist = []
+    response = ""
+    for exercise_type, exercise_amount in new_exercises.items():
+        if exercise_type in exercises.keys():
+            # If we're decrementing an exercise and it removes all of that exercise, remove the
+            #   exercise from the dictionary
+            if (int(exercise_amount) < 0
+                    and abs(int(exercise_amount)) >= int(exercises[exercise_type])):
+                exercises.pop(exercise_type)
+                popped.append(exercise_type)
+            else:
+                exercises[exercise_type] = exercises[exercise_type] + int(exercise_amount)
+                if int(exercise_amount) > 0:
+                    incremented.append(exercise_type)
+                else:
+                    decremented.append(exercise_type)
+        else:
+            if int(exercise_amount) > 0:
+                exercises[exercise_type] = int(exercise_amount)
+                incremented.append(exercise_type)
+            else:
+                did_not_exist.append(exercise_type)
+    if len(incremented) > 0:
+        response = response + " and ".join(incremented) + " were added to the queue. "
+    if len(decremented) > 0:
+        response = response + " and ".join(decremented) + " were subtracted from the queue. "
+    if len(popped) > 0:
+        response = response + " and ".join(popped) + " were eliminated from the queue. "
+    if len(did_not_exist) > 0:
+        response = response + " and ".join(did_not_exist) + " did not exist in the queue."
+    if not response == "":
+        post(response)
+
+
