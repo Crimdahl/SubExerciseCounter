@@ -2,22 +2,28 @@
 
 # Importing Required Libraries
 import sys
+import codecs
+import json
+import os
+import threading
+import clr
+
+from TwitchLib.PubSub import TwitchPubSub
+from datetime import datetime, timedelta
+from time import sleep
 
 sys.platform = "win32"
-import codecs, json, os, re, io, threading, datetime, clr, math
 
 clr.AddReference("IronPython.Modules.dll")
 clr.AddReferenceToFileAndPath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "References",
                                            "TwitchLib.PubSub.dll"))
-from TwitchLib.PubSub import TwitchPubSub
-from datetime import datetime, timedelta
 
 #   Script Information <Required>
 ScriptName = "SubExerciseCounter"
 Website = "https://www.twitch.tv/Crimdahl"
 Description = "Tracks a count of subscription-related exercises."
 Creator = "Crimdahl"
-Version = "1.1.2"
+Version = "2.2"
 
 #   Define Global Variables <Required>
 script_path = os.path.dirname(__file__)
@@ -30,8 +36,14 @@ exercises = {}
 twitch_event_receiver = None
 twitch_event_receiver_queue = []
 thread = None
-tick_timer = datetime.now() + timedelta(minutes=5)
+
+tick_timer = datetime.now() + timedelta(minutes=10)
 attempt_reconnect = True
+retry_count = 0
+retry_max = 5
+
+stream_live = False
+script_uptime = None
 
 
 # Define Settings. If there is no settings file created, then use default values in else statement.
@@ -218,7 +230,6 @@ def Execute(data):
                     # Insufficient arguments supplied
                     post("Command usage: ![command name] addpreset [preset name] [integer] [exercise type]"
                          "(| [integer] [exercise type)...")
-
             elif subcommand == "delpreset":
                 if data.GetParamCount() == 3:
                     try:
@@ -230,9 +241,15 @@ def Execute(data):
                         post("No preset by that name exists.")
                         return
                     # Insufficient arguments supplied
-                    post("Command usage: ![command name] delpreset [preset name]")
+                post("Command usage: ![command name] delpreset [preset name]")
             elif subcommand == "?" or subcommand == "help":
                 post("Available subcommands: add, sub, reset, clear, preset, addpreset, delpreset.")
+            elif subcommand == "uptime":
+                if not script_uptime:
+                    post("SubExerciseCount is not currently connected to the channel.")
+                else:
+                    post("SubExerciseCount has been connected to the channel for " +
+                         calculate_uptime())
 
         else:
             post("Sorry, " + data.UserName + ", you do not have permission to use that command.")
@@ -243,22 +260,37 @@ def Execute(data):
 
 #   [Required] Tick method (Gets called during every iteration even when there is no incoming data)
 def Tick():
-    # Every x minutes, attempt to connect to Twitch
-    global tick_timer
-    if tick_timer <= datetime.now():
-        tick_timer = datetime.now() + timedelta(minutes=script_settings.reconnect_interval)
-        global twitch_event_receiver
-        if twitch_event_receiver is None:
-            post("ExerciseCounter is attempting to reconnect to the channel to listen for subscriptions.")
-            Start()
+    global stream_live, twitch_event_receiver, tick_timer, retry_count, retry_max
+    if not stream_live and Parent.IsLive():
+        # Stream has gone live since last check
+        if not script_uptime:
+            post("You've gone live! SubExerciseCount is not currently connected to the channel.")
+        else:
+            post("You've gone live! SubExerciseCount has been connected to the channel for " + calculate_uptime())
+
+    if not twitch_event_receiver and \
+            script_settings.attempt_reconnect and \
+            retry_count < retry_max and \
+            tick_timer <= datetime.now():
+        Start()
+        if not twitch_event_receiver:
+            post("SubExerciseCounter failed to reconnect to Twitch: Retry " +
+                 str(retry_count) +
+                 " of " +
+                 str(retry_max) + ".")
+            sleep(script_settings.reconnect_interval)
+            tick_timer = datetime.now() + timedelta(minutes=1)
+            retry_count += 1
+        else:
+            post("SubExerciseCounter reconnected.")
 
     global thread
     if thread and not thread.isAlive():
         thread = None
 
     if not thread and len(twitch_event_receiver_queue) > 0:
-        log("Starting new thread. " + str(datetime.now()),
-            LoggingLevel.str_to_int.get("Debug"))
+        # log("Starting new thread. " + str(datetime.now()),
+        #     LoggingLevel.str_to_int.get("Debug"))
         thread = twitch_event_receiver_queue.pop(0)
         thread.start()
 
@@ -267,7 +299,7 @@ def Tick():
 
 #   Reload settings and receiver when clicking Save Settings in the Chatbot
 def ReloadSettings(jsonData):
-    log("Saving settings.", LoggingLevel.str_to_int.get("Info"))
+    # log("Saving settings.", LoggingLevel.str_to_int.get("Info"))
     global twitch_event_receiver
     try:
         # Reload settings
@@ -290,26 +322,25 @@ def Init():
     script_settings = Settings(settings_path)
     script_settings.Save(settings_path)
 
-    log("Exercise tracking script loaded.", LoggingLevel.str_to_int.get("Debug"))
+    # log("Exercise tracking script loaded.", LoggingLevel.str_to_int.get("Debug"))
     # Initialize Receiver
     Start()
     return
 
 
 def Start():
-    log("Starting receiver", LoggingLevel.str_to_int.get("Debug"))
+    # log("Starting receiver", LoggingLevel.str_to_int.get("Debug"))
 
     global twitch_event_receiver
     twitch_event_receiver = TwitchPubSub()
     twitch_event_receiver.OnPubSubServiceConnected += EventReceiverConnected
     twitch_event_receiver.OnChannelSubscription += EventReceiverNewSubscription
     twitch_event_receiver.OnPubSubServiceClosed += EventReceiverDisconnected
-    twitch_event_receiver.Connect()
     return
 
 
 def EventReceiverConnected(sender, e):
-    log("Event receiver connecting.", LoggingLevel.str_to_int.get("Debug"))
+    # log("Event receiver connecting.", LoggingLevel.str_to_int.get("Debug"))
     #  Get Channel ID for Username
     headers = {
         "Client-ID": script_settings.client_id,
@@ -323,15 +354,8 @@ def EventReceiverConnected(sender, e):
             post("ExerciseCounter is not authorized to listen for subscriptions on this channel. "
                  "Please ensure you have a valid oAuth key in the script settings.")
         else:
-            post("ExerciseCounter: Error connecting to channel. See logs for details.")
-            log("oAuth connection attempt error: " + str(result["error"]), LoggingLevel.str_to_int.get("Fatal"))
-
-    log("Result of oAuth connection attempt: " + str(result), LoggingLevel.str_to_int.get("Debug"))
-
-    if "error" in result.keys():
-        # The receiver failed to connect. Delete the object so the script can retry later.
-        log("ExerciseCounter Error connecting to channel: " +
-            str(result["error"]), LoggingLevel.str_to_int.get("Fatal"))
+            post("ExerciseCounter: Error connecting to channel: " + str(result["error"]))
+            # log("oAuth connection attempt error: " + str(result["error"]), LoggingLevel.str_to_int.get("Fatal"))
         global twitch_event_receiver
         twitch_event_receiver = None
         return
@@ -339,33 +363,31 @@ def EventReceiverConnected(sender, e):
     user = json.loads(result["response"])
     user_id = user["data"][0]["id"]
 
-    log("Connection to Twitch channel " + Parent.GetChannelName() +
-        " established. Now listening for new subscriptions.",
-        LoggingLevel.str_to_int.get("Info"))
-
     twitch_event_receiver.ListenToSubscriptions(user_id)
     twitch_event_receiver.SendTopics(script_settings.twitch_oauth_token)
     post("ExerciseCounter: Connection to Twitch channel '" + Parent.GetChannelName() +
          "' established.")
+
+    global script_uptime
+    script_uptime = datetime.now()
+
     return
 
 
 def EventReceiverDisconnected(sender, e):
-    if e:
-        post("ExerciseCounter: Connection to Twitch lost. See logs for error message.")
-        log("Disconnect error: " + str(e), LoggingLevel.str_to_int.get("Fatal"))
+    post("ExerciseCounter: Connection to Twitch lost. See logs for error message.")
+    log("Disconnect error: " + str(e), LoggingLevel.str_to_int.get("Fatal"))
+    global script_uptime
+    script_uptime = None
 
 
 def EventReceiverNewSubscription(sender, e):
-    log("Event receiver received new subscription notification.",
+    log("New subscription detected from " + str(e.DisplayName) + ".",
         LoggingLevel.str_to_int.get("Info"))
-
     twitch_event_receiver_queue.append(threading.Thread(target=NewSubscriptionWorker))
 
 
 def NewSubscriptionWorker():
-    log("New subscription received. Incrementing exercise count.",
-        LoggingLevel.str_to_int.get("Info"))
     global exercises
     exercise_amount = script_settings.subscription_exercise_increment
     if int(exercise_amount) > 0:
@@ -494,5 +516,43 @@ def modify_exercises_with_dict(new_exercises):
         response = response + " and ".join(did_not_exist) + " did not exist in the queue."
     if not response == "":
         post(response)
+
+
+def calculate_uptime():
+    global script_uptime
+    response = ""
+    if script_uptime:
+        seconds_in_day = 86400
+        seconds_in_hour = 3600
+        seconds_in_minute = 60
+        current_time = datetime.now()
+        time_delta_in_seconds = (current_time - script_uptime).total_seconds()
+        if time_delta_in_seconds >= seconds_in_day:
+            response += str(int(time_delta_in_seconds / seconds_in_day)) + " days"
+            time_delta_in_seconds = time_delta_in_seconds % seconds_in_day
+        if time_delta_in_seconds >= seconds_in_hour:
+            if len(response) > 0:
+                response += ", "
+            response += str(int(time_delta_in_seconds / seconds_in_hour)) + " hours"
+            time_delta_in_seconds = time_delta_in_seconds % seconds_in_hour
+        else:
+            response += "."
+        if time_delta_in_seconds >= seconds_in_minute:
+            if len(response) > 0:
+                response += ", "
+            response += str(int(time_delta_in_seconds / seconds_in_minute)) + " minutes"
+            time_delta_in_seconds = time_delta_in_seconds % seconds_in_minute
+        else:
+            response += "."
+        if time_delta_in_seconds >= 0:
+            if len(response) > 0:
+                response += ", "
+            response += str(int(time_delta_in_seconds)) + " seconds"
+            time_delta_in_seconds = time_delta_in_seconds % seconds_in_minute
+
+        response += "."
+
+    return response
+
 
 
