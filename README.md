@@ -52,6 +52,13 @@ Subtracts the number of the specified exercise type, if it exists. If no exercis
 -![Command Name] [reset/clear] (Exercise Type)
 Removes the specified exercise type from the queue, if it exists. If no exercise type is supplied, clears the entire exercise queue.
 
+-![Command Name] Uptime
+Displays the length of time the script has been connected to Twitch
+
+-![Command Name] reconnect
+Attempt to manually reconnect the script to your channel.
+
+
 ## Authors
 
 Crimdahl - [Twitch](https://www.twitch.tv/crimdahl), [Twitter](https://www.twitter.com/crimdahl)

@@ -23,7 +23,7 @@ ScriptName = "SubExerciseCounter"
 Website = "https://www.twitch.tv/Crimdahl"
 Description = "Tracks a count of subscription-related exercises."
 Creator = "Crimdahl"
-Version = "2.2"
+Version = "2.3"
 
 #   Define Global Variables <Required>
 script_path = os.path.dirname(__file__)
@@ -127,9 +127,9 @@ def Execute(data):
                 # Display current exercises
                 global exercises
                 if len(exercises) == 0:
-                    post("You have no exercises in the queue.")
+                    post("SubExerciseCounter: You have no exercises in the queue.")
                 else:
-                    response = "Exercises in your queue: "
+                    response = "SubExerciseCounter:  Exercises in your queue: "
                     for k, v in exercises.items():
                         response = response + str(v) + " " + str(k) + ", "
                     post(response[:len(response) - 2] + ".")
@@ -160,9 +160,11 @@ def Execute(data):
                         pass
                 # If the command has reached this point, there was a problem. Display the command usage in chat.
                 if subcommand == "add":
-                    post("Command usage: ![command name] add [integer] (exercise type)(| [integer] (exercise type))...")
+                    post("SubExerciseCounter Command usage: ![command name] add [integer] "
+                         "(exercise type)(| [integer] (exercise type))...")
                 elif subcommand == "sub":
-                    post("Command usage: ![command name] sub [integer] (exercise type)(| [integer] (exercise type))...")
+                    post("SubExerciseCounter Command usage: ![command name] sub [integer] "
+                         "(exercise type)(| [integer] (exercise type))...")
                 return
             elif subcommand == "reset" or subcommand == "clear":
                 # Command should look like: !command reset (exercise type)
@@ -178,15 +180,15 @@ def Execute(data):
                         exercises.pop(exercise_type)
                     else:
                         log("Reset subcommand was supplied an exercise type that did not exist: " +
-                            str(exercise_type), LoggingLevel.str_to_int.get("Warn"))
+                            str(exercise_type), LoggingLevel.str_to_int.get("Debug"))
 
                     # Regardless of the outcome, I send a success message
-                    post(str(exercise_type).title() + " have been cleared.")
+                    post("SubExerciseCounter: " + str(exercise_type).title() + " have been cleared.")
                     return
                 else:
                     # No exercise type was supplied. Clear the exercises dictionary.
                     exercises = {}
-                    post("All exercises have been cleared.")
+                    post("SubExerciseCounter: All exercises have been cleared.")
                     return
             elif subcommand == "preset" or subcommand == "presets":
                 if data.GetParamCount() > 2:
@@ -199,16 +201,17 @@ def Execute(data):
                         else:
                             presets_not_found.append(str(preset))
                     if len(presets_not_found) > 0:
-                        post("No presets were found for '" + "' and '".join(presets_not_found) + "'.")
+                        post("SubExerciseCounter: No presets were found for '" +
+                             "' and '".join(presets_not_found) + "'.")
                 else:
                     if len(script_settings.presets) > 0:
                         available_presets = []
                         for preset in script_settings.presets.keys():
                             available_presets.append(preset)
                         available_presets.sort()
-                        post("Available presets: " + ", ".join(available_presets))
+                        post("SubExerciseCounter: Available presets are " + ", ".join(available_presets))
                     else:
-                        post("There are no saved presets.")
+                        post("SubExerciseCounter: There are no saved presets.")
             elif subcommand == "addpreset":
                 # Command should look like: !command addpreset [Preset Name] [Preset Exercises]
                 if data.GetParamCount() >= 3:
@@ -220,41 +223,50 @@ def Execute(data):
                         global settings_path
                         script_settings.presets[new_preset] = new_exercise_dict
                         script_settings.Save(settings_path)
-                        post("Preset '" + new_preset + "' saved.")
+                        post("SubExerciseCounter: Preset '" + new_preset + "' saved.")
                         return
                     except ValueError as e:
                         # Command was supplied an invalid first argument.
-                        log("preset subcommand was supplied an invalid argument: " +
-                            str(e), LoggingLevel.str_to_int.get("Warn"))
+                        log("Preset subcommand was supplied an invalid argument: " +
+                            str(e), LoggingLevel.str_to_int.get("Debug"))
                         pass
                     # Insufficient arguments supplied
-                    post("Command usage: ![command name] addpreset [preset name] [integer] [exercise type]"
+                    post("SubExerciseCounter Command usage: ![command name] addpreset [preset name] "
+                         "[integer] [exercise type]"
                          "(| [integer] [exercise type)...")
             elif subcommand == "delpreset":
                 if data.GetParamCount() == 3:
                     try:
                         script_settings.presets.pop(data.GetParam(2))
                         script_settings.Save(settings_path)
-                        post("Preset deleted.")
+                        post("SubExerciseCounter: Preset deleted.")
                         return
                     except KeyError as e:
-                        post("No preset by that name exists.")
+                        post("SubExerciseCounter: No preset by that name exists.")
                         return
                     # Insufficient arguments supplied
-                post("Command usage: ![command name] delpreset [preset name]")
+                post("SubExerciseCounter Command usage: ![command name] delpreset [preset name]")
             elif subcommand == "?" or subcommand == "help":
-                post("Available subcommands: add, sub, reset, clear, preset, addpreset, delpreset.")
+                post("SubExerciseCounter: Available subcommands are add, sub, reset, clear, preset, addpreset, "
+                     "delpreset, uptime, and reconnect.")
             elif subcommand == "uptime":
                 if not script_uptime:
-                    post("The SubExerciseCounter script is not currently connected to the channel.")
+                    post("SubExerciseCounter: The script is not currently connected to the channel.")
                 else:
-                    post("The SubExerciseCounter script has been connected to the channel for " +
+                    post("SubExerciseCounter: The script has been connected to the channel for " +
+                         calculate_uptime())
+            elif subcommand == "reconnect":
+                global twitch_event_receiver
+                if not twitch_event_receiver:
+                    post("SubExerciseCounter: Attempting to connect to Twitch...")
+                    Start()
+                else:
+                    post("SubExerciseCounter: The SubExerciseCounter script is already connected. "
+                         "The script has been connected to the channel for " +
                          calculate_uptime())
 
         else:
-            post("Sorry, " + data.UserName + ", you do not have permission to use that command.")
-            log(data.UserName + " has insufficient permissions to use that command.",
-                LoggingLevel.str_to_int.get("Warn"))
+            post("SubExerciseCounter: Sorry, " + data.UserName + ", you do not have permission to use that command.")
         return
 
 
@@ -266,12 +278,14 @@ def Tick():
         # Stream has gone live since last check
         stream_live = True
         if not script_uptime:
-            post("You've gone live! The SubExerciseCounter script is not currently connected to the channel.")
+            post("SubExerciseCounter: You've gone live! The SubExerciseCounter script is not currently connected "
+                 "to the channel.")
         else:
-            post("You've gone live! The SubExerciseCounter script has been connected to the channel for " + calculate_uptime())
+            post("SubExerciseCounter: You've gone live! The SubExerciseCounter script has been connected to the "
+                 "channel for " + calculate_uptime())
 
     if stream_live and not Parent.IsLive():
-        log("Stream has gone offline.", LoggingLevel.str_to_int.get("Info"))
+        log("Stream has gone offline.", LoggingLevel.str_to_int.get("debug"))
         stream_live = False
 
     if not twitch_event_receiver and \
@@ -280,14 +294,14 @@ def Tick():
             tick_timer <= datetime.now():
         Start()
         if not twitch_event_receiver:
-            post("SubExerciseCounter failed to reconnect to Twitch: Retry " +
+            post("SubExerciseCounter: failed to reconnect to Twitch. Retry " +
                  str(retry_count) +
                  " of " +
                  str(retry_max) + ".")
             tick_timer = datetime.now() + timedelta(minutes=script_settings.reconnect_interval)
             retry_count += 1
         else:
-            post("SubExerciseCounter reconnected.")
+            post("SubExerciseCounter: Script reconnected.")
 
     global thread
     if thread and not thread.isAlive():
@@ -337,7 +351,7 @@ def Init():
     # Initialize Receiver
     Start()
     if twitch_event_receiver:
-        post("ExerciseCounter: Twitch Connection Established.")
+        post("SubExerciseCounter:: Twitch Connection Established.")
     return
 
 
@@ -365,11 +379,11 @@ def EventReceiverConnected(sender, e):
 
     if "error" in result.keys():
         if result["error"] == "Unauthorized":
-            post("ExerciseCounter is not authorized to listen for subscriptions on this channel. "
+            post("SubExerciseCounter: Script is not authorized to listen for subscriptions on this channel. "
                  "Please ensure you have a valid oAuth key in the script settings.")
         else:
-            post("ExerciseCounter: Error connecting to channel: " + str(result["error"]))
-            # log("oAuth connection attempt error: " + str(result["error"]), LoggingLevel.str_to_int.get("Fatal"))
+            post("SubExerciseCounter: Unexpected error connecting to channel: " + str(result["error"]))
+            log("oAuth connection attempt error: " + str(result["error"]), LoggingLevel.str_to_int.get("Fatal"))
         global twitch_event_receiver
         twitch_event_receiver = None
         return
@@ -386,37 +400,68 @@ def EventReceiverConnected(sender, e):
 
 def EventReceiverDisconnected(sender, e):
     if e:
-        post("ExerciseCounter: Connection to Twitch lost. See logs for error message.")
+        post("SubExerciseCounter: connection to Twitch lost. See logs for error message.")
         log("Disconnect error: " + str(e), LoggingLevel.str_to_int.get("Fatal"))
     else:
-        log("Connection to Twitch lost. No error was recorded. Maybe script was restarted?",
-            LoggingLevel.str_to_int.get("Info"))
+        log("Connection to Twitch lost. No error was recorded, so this is probably fine.",
+            LoggingLevel.str_to_int.get("Debug"))
     global script_uptime
     script_uptime = None
 
 
 def EventReceiverNewSubscription(sender, e):
-    log("New subscription detected from " + str(e.DisplayName) + ".",
-        LoggingLevel.str_to_int.get("Info"))
+    try:
+        log("New subscription detected from " + str(e.Subscription.DisplayName) + ".",
+            LoggingLevel.str_to_int.get("Info"))
+    except Exception as ex:
+        pass
     twitch_event_receiver_queue.append(threading.Thread(target=NewSubscriptionWorker))
 
 
 def NewSubscriptionWorker():
     global exercises
     exercise_amount = script_settings.subscription_exercise_increment
-    if int(exercise_amount) > 0:
+    if not exercise_amount:
+        post("SubExerciseCounter: An error has occurred incrementing the exercises. "
+             "Please see the logs for error details.")
+        log("Error adding sub exercise: The exercise amount is not configured in the settings.",
+            LoggingLevel.str_to_int.get("Fatal"))
+        return
+    try:
+        exercise_amount = int(exercise_amount)
+        if exercise_amount < 0:
+            raise ValueError
+    except ValueError:
+        post("SubExerciseCounter: An error has occurred incrementing the exercises. "
+             "Please see the logs for error details.")
+        log("Error adding sub exercise: The exercise amount configured was not a positive integer.",
+            LoggingLevel.str_to_int.get("Fatal"))
+        return
+    try:
         exercise_type = script_settings.subscription_exercise_type
+        if not exercise_type:
+            post("SubExerciseCounter: An error has occurred incrementing the exercises. "
+                 "Please see the logs for error details.")
+            log("Error adding sub exercise: The exercise type is not configured in the settings.",
+                LoggingLevel.str_to_int.get("Fatal"))
+            return
+
         if exercise_type in exercises.keys():
             exercises[exercise_type] = exercises[exercise_type] + int(exercise_amount)
         else:
             exercises[exercise_type] = int(exercise_amount)
 
-    if not script_settings.response_on_subscription == "":
-        message = script_settings.response_on_subscription
-        message = message.replace("$channel", Parent.GetChannelName())
-        message = message.replace("$exercise", script_settings.subscription_exercise_type)
-        message = message.replace("$count", str(exercises[exercise_type]))
-        post(message)
+        if script_settings.response_on_subscription:
+            message = script_settings.response_on_subscription
+            message = message.replace("$channel", Parent.GetChannelName())
+            message = message.replace("$exercise", script_settings.subscription_exercise_type)
+            message = message.replace("$count", str(exercises[exercise_type]))
+            post(message)
+    except Exception as e:
+        post("SubExerciseCounter: An error has occurred incrementing the exercises. "
+             "Please see the logs for error details.")
+        log("Unexpected error adding exercises: " + str(e),
+            LoggingLevel.str_to_int.get("Fatal"))
     return
 
 
@@ -428,7 +473,7 @@ def Unload():
             twitch_event_receiver.Disconnect()
             twitch_event_receiver = None
     except:
-        log("Event receiver already disconnected", LoggingLevel.str_to_int.get("Warn"))
+        log("Event receiver already disconnected.", LoggingLevel.str_to_int.get("Debug"))
     return
 
 
