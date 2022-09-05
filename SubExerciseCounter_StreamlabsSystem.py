@@ -7,16 +7,16 @@ import json
 import os
 import threading
 import clr
-
-from TwitchLib.PubSub import TwitchPubSub
 from datetime import datetime, timedelta
 from time import sleep
+
 
 sys.platform = "win32"
 
 clr.AddReference("IronPython.Modules.dll")
 clr.AddReferenceToFileAndPath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "References",
                                            "TwitchLib.PubSub.dll"))
+from TwitchLib.PubSub import TwitchPubSub
 
 #   Script Information <Required>
 ScriptName = "SubExerciseCounter"
@@ -246,9 +246,9 @@ def Execute(data):
                 post("Available subcommands: add, sub, reset, clear, preset, addpreset, delpreset.")
             elif subcommand == "uptime":
                 if not script_uptime:
-                    post("SubExerciseCount is not currently connected to the channel.")
+                    post("The SubExerciseCounter script is not currently connected to the channel.")
                 else:
-                    post("SubExerciseCount has been connected to the channel for " +
+                    post("The SubExerciseCounter script has been connected to the channel for " +
                          calculate_uptime())
 
         else:
@@ -261,12 +261,18 @@ def Execute(data):
 #   [Required] Tick method (Gets called during every iteration even when there is no incoming data)
 def Tick():
     global stream_live, twitch_event_receiver, tick_timer, retry_count, retry_max
+
     if not stream_live and Parent.IsLive():
         # Stream has gone live since last check
+        stream_live = True
         if not script_uptime:
-            post("You've gone live! SubExerciseCount is not currently connected to the channel.")
+            post("You've gone live! The SubExerciseCounter script is not currently connected to the channel.")
         else:
-            post("You've gone live! SubExerciseCount has been connected to the channel for " + calculate_uptime())
+            post("You've gone live! The SubExerciseCounter script has been connected to the channel for " + calculate_uptime())
+
+    if stream_live and not Parent.IsLive():
+        log("Stream has gone offline.", LoggingLevel.str_to_int.get("Info"))
+        stream_live = False
 
     if not twitch_event_receiver and \
             script_settings.attempt_reconnect and \
@@ -278,8 +284,7 @@ def Tick():
                  str(retry_count) +
                  " of " +
                  str(retry_max) + ".")
-            sleep(script_settings.reconnect_interval)
-            tick_timer = datetime.now() + timedelta(minutes=1)
+            tick_timer = datetime.now() + timedelta(minutes=script_settings.reconnect_interval)
             retry_count += 1
         else:
             post("SubExerciseCounter reconnected.")
@@ -322,9 +327,17 @@ def Init():
     script_settings = Settings(settings_path)
     script_settings.Save(settings_path)
 
+    global stream_live
+    if Parent.IsLive():
+        stream_live = True
+    else:
+        stream_live = False
+
     # log("Exercise tracking script loaded.", LoggingLevel.str_to_int.get("Debug"))
     # Initialize Receiver
     Start()
+    if twitch_event_receiver:
+        post("ExerciseCounter: Twitch Connection Established.")
     return
 
 
@@ -336,6 +349,7 @@ def Start():
     twitch_event_receiver.OnPubSubServiceConnected += EventReceiverConnected
     twitch_event_receiver.OnChannelSubscription += EventReceiverNewSubscription
     twitch_event_receiver.OnPubSubServiceClosed += EventReceiverDisconnected
+    twitch_event_receiver.Connect()
     return
 
 
@@ -365,18 +379,18 @@ def EventReceiverConnected(sender, e):
 
     twitch_event_receiver.ListenToSubscriptions(user_id)
     twitch_event_receiver.SendTopics(script_settings.twitch_oauth_token)
-    post("ExerciseCounter: Connection to Twitch channel '" + Parent.GetChannelName() +
-         "' established.")
-
     global script_uptime
     script_uptime = datetime.now()
-
     return
 
 
 def EventReceiverDisconnected(sender, e):
-    post("ExerciseCounter: Connection to Twitch lost. See logs for error message.")
-    log("Disconnect error: " + str(e), LoggingLevel.str_to_int.get("Fatal"))
+    if e:
+        post("ExerciseCounter: Connection to Twitch lost. See logs for error message.")
+        log("Disconnect error: " + str(e), LoggingLevel.str_to_int.get("Fatal"))
+    else:
+        log("Connection to Twitch lost. No error was recorded. Maybe script was restarted?",
+            LoggingLevel.str_to_int.get("Info"))
     global script_uptime
     script_uptime = None
 
@@ -535,15 +549,11 @@ def calculate_uptime():
                 response += ", "
             response += str(int(time_delta_in_seconds / seconds_in_hour)) + " hours"
             time_delta_in_seconds = time_delta_in_seconds % seconds_in_hour
-        else:
-            response += "."
         if time_delta_in_seconds >= seconds_in_minute:
             if len(response) > 0:
                 response += ", "
             response += str(int(time_delta_in_seconds / seconds_in_minute)) + " minutes"
             time_delta_in_seconds = time_delta_in_seconds % seconds_in_minute
-        else:
-            response += "."
         if time_delta_in_seconds >= 0:
             if len(response) > 0:
                 response += ", "
